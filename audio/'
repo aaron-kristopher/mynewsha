@@ -33,42 +33,27 @@ def traverse_wav():
             f" : Size: {fmt_sc_size}\tAudio Format {'PCM' if (audio_fmt == 1) else 'MPEG'}\tAudio Channels: {channels}\tSample Rate: {sample_rate}\tBit Rate: {bit_rate}"
         )
 
-        data_chunk_offset = 36 + (0 if audio_fmt == 1 else 2)
+        data_chunk_offset = 40 + (0 if audio_fmt == 1 else 2)
         logger.info(" Retrieving Data subchunk...")
         data_sc_size: int = struct.unpack_from(
-            "<I", buffer=file_data, offset=data_chunk_offset + 4
+            "<I", buffer=file_data, offset=data_chunk_offset
         )[0]
-        logger.info(f" Check: {(file_data[36:46].hex(' '))}")
-        logger.debug(
-            f" Sanity check data offset: {struct.unpack_from('<4s', file_data, data_chunk_offset)}"
-        )
+        logger.info(f" Data Size: {data_sc_size:,}")
 
-        wav_as_float: list[int] = []
+        wav_as_int: list[int] = []
+        audio_data: int = data_chunk_offset + 4
+        for idx in range(audio_data, data_sc_size, 4):
+            dword: bytes = file_data[idx : idx + 4]
+            if channels == 2:
+                left_word, right_word = struct.unpack_from("<hh", dword)
+                logger.debug(
+                    f"Left: {left_word / 32768.0}\tRight: {right_word/ 32768.0}"
+                )
+                wav_as_int.append(((left_word + right_word) / 2) / 32768.0)
+            else:
+                wav_as_int.append(struct.unpack_from("<hh", dword)[0] / 32768.0)
 
-        for idx in range(0, data_sc_size, 4):
-            offset: int = data_chunk_offset + 8 + idx
-
-            # logger.debug(
-            #     f" Chunk Size: {chunk_size}\tSubchunk Size: {data_sc_size}\tData: {data_chunk_offset}\tOffset: {offset}\tFile Length: {len(file_data)}"
-            # )
-
-            try:
-                if idx in (0, 1763996):
-                    logger.debug(f" Offset when index is {idx} = {offset}")
-                dword: bytes = file_data[offset : offset + 4]
-                if channels == 2:
-                    left_word, right_word = struct.unpack_from("<hh", dword)
-                    # logger.debug(
-                    #     f"Left: {left_word / 32768.0}\tRight: {right_word/ 32768.0}"
-                    # )
-                    wav_as_float.append(((left_word + right_word) / 2) / 32768.0)
-                else:
-                    wav_as_float.append(struct.unpack_from("<hh", dword)[0] / 32768.0)
-            except Exception:
-                logger.debug(file_data[1764040:1764042].hex(" "))
-
-        logger.debug(f" File Size: {chunk_size}\tData Size: {data_sc_size}")
-        logger.debug(f" WAVE file audio data: {len(wav_as_float)}")
+        logger.debug(f" WAVE file audio data: {wav_as_int[:10]}")
 
 
 def main():
